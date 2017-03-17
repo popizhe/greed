@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc" xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:p="http://www.springframework.org/schema/p"
+	xsi:schemaLocation="
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.2.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.2.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.2.xsd
+		http://www.springframework.org/schema/jdbc http://www.springframework.org/schema/jdbc/spring-jdbc-4.2.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.2.xsd">
+
+	<description>spring configuration</description>
+	<!-- 注解支持 -->
+	<context:annotation-config/>
+
+	<!-- 使用annotation 自动注册bean,并检查@Required,@Autowired的属性已被注入 -->
+	<context:component-scan base-package="ray.liu">
+	</context:component-scan>
+	
+	<!-- 将多个配置文件读取到容器中，交给Spring管理 -->  
+    <bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">  
+        <property name="locations">  
+           <list>  
+              <value>classpath:application.properties</value>
+              <!-- 
+              <value>classpath:quartz.properties</value>
+              <value>classpath:rabbitmq.properties</value>
+              <value>classpath:redis.properties</value>
+               -->
+            </list>  
+        </property>  
+    </bean> 
+	
+	<aop:aspectj-autoproxy /> 
+	
+	<bean id="taskExecutor"
+		class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+		<!-- 核心线程数 -->
+		<property name="corePoolSize" value="5" />
+		<!-- 最大线程数 -->
+		<property name="maxPoolSize" value="8" />
+		<!-- 队列最大长度 >=mainExecutor.maxSize -->
+		<property name="queueCapacity" value="30" />
+		<!-- 线程池维护线程所允许的空闲时间 -->
+		<property name="keepAliveSeconds" value="500" />
+
+		<property name="WaitForTasksToCompleteOnShutdown" value="true" />
+		<!-- 线程池对拒绝任务(无线程可用)的处理策略 <property name="rejectedExecutionHandler"> <bean 
+			class="java.util.concurrent.ThreadPoolExecutor$CallerRunsPolicy" /> </property> -->
+	</bean>
+	
+	
+	<!-- MyBatis配置 -->
+	<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+	<!-- dynamic data source
+		<property name="dataSource" ref="dynamicDataSource" />
+	 -->
+		<!-- scan entity automatically -->
+		<property name="typeAliasesPackage" value="ray.liu.bean" />
+		<!-- mapper  -->
+		<property name="mapperLocations" value="classpath:mybatis/*Mapper.xml" />
+		<property name="configLocation" value="classpath:mybatis/mybatis-config.xml" />
+	</bean>
+
+	<!-- scan all basePackage with @MyBatisRepository  -->
+	<bean class="org.mybatis.spring.mapper.MapperScannerConfigurer">
+		<property name="basePackage" value="ray.liu.dao" />
+		<property name="annotationClass" value="ray.liu.dao.MyBatisRepository" />
+		<property name="sqlSessionFactoryBeanName" value="sqlSessionFactory" />
+	</bean>
+
+	<!-- 事务管理器配置, 单数据源事务 -->
+	<bean id="transactionManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager"
+		p:dataSource-ref="dataSource" />
+
+	<!-- 使用annotation定义事务 -->
+	<tx:annotation-driven transaction-manager="transactionManager"
+		proxy-target-class="true" />
+
+	<bean id="dataSource" class="com.alibaba.druid.pool.DruidDataSource"
+		destroy-method="close">
+		<property name="url" value="${jdbc.url}?characterEncoding=UTF8&amp;zeroDateTimeBehavior=convertToNull" />
+		<property name="username" value="${jdbc.user}" />
+		<property name="password" value="${jdbc.password}"/>
+
+		<property name="filters" value="stat" />
+
+		<property name="maxActive" value="40" />
+		<property name="initialSize" value="1" />
+		<property name="maxWait" value="60000" />
+		<property name="minIdle" value="1" />
+
+		<property name="timeBetweenEvictionRunsMillis" value="60000" />
+		<property name="minEvictableIdleTimeMillis" value="300000" />
+		<!-- 超过时间限制是否回收 -->  
+		<property name="removeAbandoned" value="true" />  
+		<!-- 超时时间；单位为秒。180秒=3分钟 -->  
+		<property name="removeAbandonedTimeout" value="180" />  
+		<!-- 关闭abanded连接时输出错误日志 -->  
+		<property name="logAbandoned" value="true" />  
+		<property name="validationQuery" value="SELECT 'x'" />
+		<property name="testWhileIdle" value="true" />
+		<property name="testOnBorrow" value="false" />
+		<property name="testOnReturn" value="false" />
+		<property name="poolPreparedStatements" value="true" />
+		<property name="maxPoolPreparedStatementPerConnectionSize"
+			value="20" />
+	</bean>
+	
+	<!-- dynamic data source -->
+	           <!--  
+	<bean class="ray.liu.common.datasource.DynamicDataSource" id="dynamicDataSource">  
+	    <property name="targetDataSources">   
+	       <map key-type="java.lang.String">   
+	           <entry value-ref="dataSource" key="common"/>
+	           no second data source right now in haohuan
+	           <entry value-ref="sndDataSource" key="snd"/>  
+	       </map>   
+	    </property>   
+	    <property name="defaultTargetDataSource" ref="dataSource" />  
+	</bean> 
+	            -->
+	<!-- 
+	<bean id="sndDataSource" class="com.alibaba.druid.pool.DruidDataSource"
+		destroy-method="close">
+		<property name="url" value="${snd.jdbc.url}?characterEncoding=UTF8&amp;zeroDateTimeBehavior=convertToNull" />
+		<property name="username" value="${snd.jdbc.user}" />
+		<property name="password" value="${snd.jdbc.password}"/>
+		<property name="filters" value="stat" />
+		<property name="maxActive" value="40" />
+		<property name="initialSize" value="1" />
+		<property name="maxWait" value="60000" />
+		<property name="minIdle" value="1" />
+
+		<property name="timeBetweenEvictionRunsMillis" value="60000" />
+		<property name="minEvictableIdleTimeMillis" value="300000" />
+
+		<property name="validationQuery" value="SELECT 'x'" />
+		<property name="testWhileIdle" value="true" />
+		<property name="testOnBorrow" value="false" />
+		<property name="testOnReturn" value="false" />
+		<property name="poolPreparedStatements" value="true" />
+		<property name="maxPoolPreparedStatementPerConnectionSize"
+			value="20" />
+	</bean>
+	 -->
+	
+	
+	<!-- redis -->
+	<!-- 
+	<bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig">  
+        <property name="maxIdle" value="${redis.maxIdle}" />  
+        <property name="maxActive" value="${redis.maxActive}" />  
+        <property name="maxWait" value="${redis.maxWait}" />  
+        <property name="testOnBorrow" value="${redis.testOnBorrow}" />  
+    </bean>  
+      
+    <bean id="connectionFactory" class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory"  
+        p:host-name="${redis.host}" p:port="${redis.port}" p:password="${redis.pass}"  p:pool-config-ref="poolConfig"/>  
+      
+    <bean id="redisTemplate" class="org.springframework.data.redis.core.StringRedisTemplate">  
+        <property name="connectionFactory"   ref="connectionFactory" />  
+    </bean>      
+	 -->
+			<!-- 
+	<bean id="restTemplate" class="org.springframework.web.client.RestTemplate">
+		<property name="messageConverters">
+			<list>
+				<bean
+						class="org.springframework.http.converter.support.AllEncompassingFormHttpMessageConverter">
+					<property name="supportedMediaTypes">
+						<list>
+							<value>application/x-www-form-urlencoded;charset=UTF-8</value>
+							<value>multipart/form-data;charset=UTF-8</value>
+							<value>text/plain;charset=UTF-8</value>
+							<value>application/xml;charset=UTF-8</value>
+						</list>
+					</property>
+					<property name="partConverters">
+						<list>
+							<bean
+									class="org.springframework.http.converter.StringHttpMessageConverter">
+								<property name="supportedMediaTypes">
+									<list>
+										<value>text/html;charset=UTF-8</value>
+										<value>text/plain;charset=UTF-8</value>
+										<value>multipart/form-data;charset=UTF-8</value>
+										<value>application/xml;charset=UTF-8</value>
+									</list>
+								</property>
+							</bean>
+							<bean class="org.springframework.http.converter.ByteArrayHttpMessageConverter" />
+							<bean class="org.springframework.http.converter.ResourceHttpMessageConverter" />
+							<bean class="org.springframework.http.converter.xml.SourceHttpMessageConverter" />
+							<bean class="org.springframework.http.converter.xml.Jaxb2RootElementHttpMessageConverter" />
+							<bean class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter" />
+						</list>
+					</property>
+				</bean>
+				<bean
+						class="org.springframework.http.converter.StringHttpMessageConverter">
+					<property name="supportedMediaTypes">
+						<list>
+							<value>text/html;charset=UTF-8</value>
+							<value>text/plain;charset=UTF-8</value>
+							<value>multipart/form-data;charset=UTF-8</value>
+							<value>application/xml;charset=UTF-8</value>
+						</list>
+					</property>
+				</bean>
+			</list>
+		</property>
+	</bean>
+			 -->
+    
+    <!-- 
+    <import resource="classpath:spring-quartz.xml"/>
+    <import resource="classpath:spring-redis.xml"/>
+    <import resource="classpath:spring-rabbitmq.xml"/>
+     -->
+
+     <!--
+     <bean id="passwordEncoder" class="org.springframework.security.authentication.encoding.Md5PasswordEncoder" />
+	 <import resource="classpath:spring-security-common.xml"/>
+     <import resource="classpath:spring-redis-common.xml"/>
+	 <import resource="classpath:spring-shiro-web.xml"/>
+      -->
+      
+</beans>	
